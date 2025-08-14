@@ -65,15 +65,18 @@ class GeometryPartDataset(Dataset):
             if not self.min_num_part <= len(mesh_files) <= self.max_num_part:
                 raise ValueError
             # read mesh and sample points
-
+            
+            #用 Open3D 库读取每个.obj文件对应的三角网格模型，存入meshes列表（每个元素是一个网格对象）
             meshes = [
                 o3d.io.read_triangle_mesh(os.path.join(data_folder, mesh_file))
                 for mesh_file in mesh_files
             ]
+            # 获取当前样本的部件总数n
             n = len(meshes)
-            labels = np.zeros([n, n])
+            labels = np.zeros([n, n])#初始化一个n×n的零矩阵labels，用于存储每对部件的重叠顶点数量
             for i in range(n - 1):
                 for j in range(i + 1, n):
+                    #将距离列表d转换为 NumPy 数组，统计距离为 0 的点的数量（即两个部件的重叠顶点数），存入count。
                     src_pc = o3d.geometry.PointCloud(meshes[i].vertices)
                     tgt_pc = o3d.geometry.PointCloud(meshes[j].vertices)
                     d = src_pc.compute_point_cloud_distance(tgt_pc)
@@ -82,9 +85,9 @@ class GeometryPartDataset(Dataset):
                     labels[j, i] = count
             max_id = labels.argmax(-1)
             adjacent_label = labels > 10  # 10
-            x = np.arange(0, n)
-            adjacent_label[x, max_id] = 1
-            adjacent_label = (adjacent_label + adjacent_label.T) > 0
+            x = np.arange(0, n)#生成部件索引数组，[0, 1, 2，....，n]
+            adjacent_label[x, max_id] = 1 #max_id是labels每行最大值的索引，强制每个部件与 “重叠顶点最多的部件” 相邻（即使未达阈值 10），解决孤立部件问题。
+            adjacent_label = (adjacent_label + adjacent_label.T) > 0 # “矩阵 + 转置” 确保邻接关系对称（若i与j相邻，则j必与i相邻）
             np.save(os.path.join(data_folder, 'adjacent_labels.npy'), adjacent_label)
 
     def _save_meshes(self):
