@@ -257,5 +257,7 @@ class PointNet2SSG(nn.Module):
         xyz, features = self._break_up_pc(pointcloud)
 
         for module in self.SA_modules:
+            #最后features [B, 512, 32]，其中32代表32个关键点，512代表每个关键点的特征维度是 512；xyz：形状为 [B, 32, 3]表示最后样本经过最后一层 SA 模块采样得到 32 个关键点，3表示每个关键点的坐标
             xyz, features = module(xyz, features)  # [B, C, N]
+            
         return features, xyz  # [B, C]
