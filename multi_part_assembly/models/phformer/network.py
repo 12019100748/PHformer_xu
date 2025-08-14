@@ -89,6 +89,7 @@ class PHFormer(BaseModel):
     """PNTransformer with iterative refinement."""
 
     def __init__(self, cfg):
+        #该设置在configs/_base_/models/phformer.py设置的，refine_steps为1，pose_pc_feat为false
         self.refine_steps = cfg.model.refine_steps
         self.pose_pc_feat = cfg.model.pose_pc_feat
 
@@ -145,6 +146,9 @@ class PHFormer(BaseModel):
     def _extract_part_feats(self, part_pcs, part_valids):
         """Extract per-part point cloud features."""
         B, P, N, _ = part_pcs.shape  # [B, P, N, 3]
+        #通过valid_mask筛选part_pcs中有效的部件点云，结果valid_pcs的形状为[n, N, 3]，其中：
+        # n：当前批次中所有有效部件的总数（n = sum(valid_mask)）；
+        # 保留每个有效部件的N个点（三维坐标）
         valid_mask = (part_valids == 1)
         # shared-weight encoder
         valid_pcs = part_pcs[valid_mask]  # [n, N, 3]
