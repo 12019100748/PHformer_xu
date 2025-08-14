@@ -116,7 +116,7 @@ class PHFormer(BaseModel):
         )
         return encoder
     def _init_Transformer(self):
-        layers = ['self', 'cross'] * 2
+        layers = ['self', 'cross'] * 2   #传入的layers = ['self', 'cross'] * 2，即共 4 个块，顺序为self→cross→self→cross
         return HybridTransformer(layers, self.pc_feat_dim, 4)
 
     def _init_global_ecoder(self):
