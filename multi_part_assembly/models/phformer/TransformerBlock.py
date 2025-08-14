@@ -272,15 +272,19 @@ class HybridTransformer(nn.Module):
     def forward(self, feats, xyz, P_mask):
 
         B, P = P_mask.shape
-        _, C, K = feats.shape
+        _, C, K = feats.shape#K：每个部件的关键点数量C每个关键点的维度信息
         # generate attention mask, intra-superpoints are masked
-        idx = torch.arange(0, K, device=feats.device)
-        idx0, idx1 = torch.meshgrid(idx, idx, indexing='ij')
+        idx = torch.arange(0, K, device=feats.device)  #创建一个从0到K-1的连续整数张量，代表单个部件内的K个关键点的索引。
+        idx0, idx1 = torch.meshgrid(idx, idx, indexing='ij')#通过meshgrid生成单个部件内所有可能的关键点对(i, j)，其中i和j均属于该部件的K个关键点。
         idx = torch.stack([idx0, idx1], -1)
-        idx = idx.unsqueeze(0).repeat(P, 1, 1, 1)
+        idx = idx.unsqueeze(0).repeat(P, 1, 1, 1)#repeat(P, 1, 1, 1)：在第 0 维重复P次，最终形状为[P, K, K, 2]，即每个部件都有一套[K, K, 2]的索引对。
         base_idx = torch.arange(0, P, device=feats.device) * K
         idx = idx + base_idx[:, None, None, None]
         idx = idx.reshape(-1, 2)
+
+        #scores_mask生成注意力掩码
+        #禁止同一部件内的关键点之间的注意力（intra-superpoints），仅允许跨部件的关键点注意力（inter-superpoints），避免局部冗余关联。
+        #为每个部件的K个关键点创建索引，同一部件内的关键点对（i, j）被标记为0（mask），不同部件间的为1（允许）。
         scores_mask = torch.ones([P*K, P*K], device=feats.device)
         scores_mask[idx[:, 0], idx[:, 1]] = 0.
         scores_mask = scores_mask.unsqueeze(0).repeat(B, 1, 1)
@@ -304,9 +308,11 @@ class HybridTransformer(nn.Module):
                 feats1, scores1 = self.layers[i](feats1, feats1, attention_masks=~scores_mask)
                 feats0 = feats1.reshape(B, P, K, C)
                 feats0 = feats0[P_mask]
-        feats0 = feats0.mean(1)
-
+        feats0 = feats0.mean(1)## 对每个部件的K个关键点特征求平均，得到该部件的最终特征，形状`[n, C]`
+        #scores1的形状由输入规模和注意力头数决定，具体为：[B, num_heads, N, N]，N：所有部件的关键点总数（N = P*K，P为总部件数，K为每个部件的关键点数量）
+        # 4 个关键点之间的注意力分数矩阵，scores1[0, h, i, j]表示 “第 h 个头中，关键点 i 对关键点 j 的注意力权重”。
         return feats0, scores1
+        
 class FragmentAwareTransformer(nn.Module):
     def __init__(self, blocks, d_model, num_heads, dropout=None, activation_fn='ReLU', return_attention_scores=False):
         super(FragmentAwareTransformer, self).__init__()
@@ -347,4 +353,5 @@ class FragmentAwareTransformer(nn.Module):
 
         feats0 = feats0.mean(1)
         return feats0, scores1
+
 
