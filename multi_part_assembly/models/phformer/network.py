@@ -160,7 +160,7 @@ class PHFormer(BaseModel):
 
         super_points = torch.zeros(B, P, super_xyz.shape[-2], super_xyz.shape[-1]).type_as(super_xyz)
         super_points[valid_mask] = super_xyz
-
+        #这里返回的是点、特征、和点之间的注意力分数
         return pc_feats, super_points, scores
 
 
