@@ -53,6 +53,7 @@ class RelativePoseEstimator(nn.Module):
         self.merge_edge = MLP([2 * input_dim, input_dim, input_dim])
 
     def forward(self, node_feats, valid_mask):
+        #第一次迭代时，node_feats直接等于pc_feats
         B, P, C = node_feats.shape
         pair_pc_feats = torch.cat([node_feats[:, :, None, :].repeat(1, 1, P, 1), node_feats[:, None, :, :].repeat(1, P, 1, 1)], -1)
         pair_pc_feats = pair_pc_feats.reshape(B, P * P, -1)
@@ -68,6 +69,10 @@ class RelativePoseEstimator(nn.Module):
         new_node_feats = self._edge2node(node_feats, edge_feats.reshape(B, P, P, C), adj_scores * mask)
 
         return rel_rot, rel_trans, new_node_feats, adj_scores
+        #node_feats：当前的节点特征，即每个部件的抽象特征向量
+        #edge_feats:边缘特征，即每对部件(i, j)的关联特征（由RelativePoseEstimator的编码器生成，反映i和j的交互信息）
+        #relation_matrix:部件对的关联权重矩阵（值为 0~1），relation_matrix[b, i, j]表示部件i与j的关联强度（由adj_scores * mask得到，已过滤无效部件对）
+        #更新后的节点特征，融合了原始节点特征和邻居传递的消息（边缘特征），使每个部件的特征包含自身信息和关联部件的交互信息。
     def _edge2node(self, node_feats, edge_feats, relation_matrix):
         """Perform one step of message passing, get per-node messages."""
         B, P, _ = node_feats.shape
@@ -80,6 +85,9 @@ class RelativePoseEstimator(nn.Module):
         fuse_feats = self.merge_edge(fuse_feats.permute(0, 2, 1)).permute(0, 2, 1)
         return fuse_feats
 
+    #计算邻接矩阵（correlation matrix） 和有效掩码（valid mask） 的方法cal_corr_matrix，核心功能是从模型预测的原始关联特征中生成部件间的关联分数矩阵，并过滤掉无效部件对
+    #M（邻接矩阵）形状：[B, P, P]含义：部件间的关联分数矩阵，M[b, i, j]表示第b个样本中，部件i与部件j的关联概率（范围 0~1），值越高说明两者越可能需要装配。
+    #mask（有效关联掩码）形状：[B, P, P]含义：布尔型掩码（或 0/1 矩阵），mask[b, i, j] = 1表示部件对(i, j)是有效的（即i和j都是有效部件），0表示无效（至少有一个是无效部件）。
     def cal_corr_matrix(self, corr_feats, valid_mask):
         scores = torch.sigmoid(corr_feats.squeeze(1))# B, P*P
         M = scores.reshape(valid_mask.shape[0], valid_mask.shape[1], -1)
